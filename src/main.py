@@ -30,7 +30,6 @@ if not {'text_combined', 'label'}.issubset(df.columns):
 
 # 4) Håndter label-kolonnen (0/1 eller string der kan castes)
 if df['label'].dtype == object:
-    # f.eks. strings "0" og "1" eller tal som tekst
     df['label'] = df['label'].astype(str).str.strip().astype(int)
 else:
     df['label'] = df['label'].astype(int)
@@ -55,7 +54,7 @@ y     = df['label']
 
 # 8) TF-IDF-vektorisering med begrænsning
 vectorizer = TfidfVectorizer(
-    max_features=1000,  # kun de 100 mest informative ord
+    max_features=1000,
     min_df=1,
     max_df=0.9,
     stop_words='english'
@@ -84,11 +83,16 @@ models = {
 }
 
 # 11) Træn og evaluér på validerings-sættet
-for name, model in models.items():
-    print(f"\n=== {name} ===")
-    model.fit(X_train, y_train)
-    y_pred_val = model.predict(X_val)
-    print(classification_report(y_val, y_pred_val, target_names=['Safe', 'Phishing']))
+val_report_path = os.path.join(base_path, 'val_classification_reports.txt')
+with open(val_report_path, 'w') as f:
+    for name, model in models.items():
+        f.write(f"=== {name} ===\n")
+        print(f"\n=== {name} ===")
+        model.fit(X_train, y_train)
+        y_pred_val = model.predict(X_val)
+        report = classification_report(y_val, y_pred_val, target_names=['Safe', 'Phishing'], digits=4)
+        print(report)
+        f.write(report + "\n\n")
 
 # 12) Gen-træn Random Forest på train+val
 best_model = RandomForestClassifier(random_state=42)
@@ -98,8 +102,14 @@ best_model.fit(X_trainval, y_trainval)
 
 # 13) Endelig evaluation på test-sættet
 y_pred_test = best_model.predict(X_test)
+final_report = classification_report(y_test, y_pred_test, target_names=['Safe', 'Phishing'], digits=4)
 print("\n=== Endelige test-resultater (Random Forest) ===")
-print(classification_report(y_test, y_pred_test, target_names=['Safe', 'Phishing']))
+print(final_report)
+
+test_report_path = os.path.join(base_path, 'final_test_classification_report.txt')
+with open(test_report_path, 'w') as f:
+    f.write("=== Endelige test-resultater (Random Forest) ===\n")
+    f.write(final_report)
 
 # 14) SHAP forklaringer (med beskyttelse mod out-of-bounds)
 X_test_dense = X_test.toarray()
@@ -120,11 +130,9 @@ feature_names = vectorizer.get_feature_names_out()
 n_feat       = feature_names.shape[0]
 
 def get_top_shap_features(shap_arr, features, n=5):
-    # Klip til feature-længde hvis nødvendigt
     if shap_arr.shape[0] > features.shape[0]:
         shap_arr = shap_arr[:features.shape[0]]
     idxs = np.argsort(shap_arr)[-n:][::-1]
-    # Filtrér sikre indekser
     idxs = [i for i in idxs if 0 <= i < features.shape[0]]
     return [(features[i], float(shap_arr[i])) for i in idxs]
 
