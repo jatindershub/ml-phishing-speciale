@@ -10,7 +10,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import LinearSVC
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, confusion_matrix
 from scipy.sparse import vstack
 import shap
 from tqdm import tqdm
@@ -82,7 +82,7 @@ models = {
     'KNN':            KNeighborsClassifier(n_neighbors=5)
 }
 
-# 11) Træn og evaluér på validerings-sættet
+# 11) Træn, evaluér og print confusion matrix på validerings-sættet
 val_report_path = os.path.join(base_path, 'val_classification_reports.txt')
 with open(val_report_path, 'w') as f:
     for name, model in models.items():
@@ -90,9 +90,24 @@ with open(val_report_path, 'w') as f:
         print(f"\n=== {name} ===")
         model.fit(X_train, y_train)
         y_pred_val = model.predict(X_val)
-        report = classification_report(y_val, y_pred_val, target_names=['Safe', 'Phishing'], digits=4)
+
+        # Classification report
+        report = classification_report(
+            y_val, y_pred_val, 
+            target_names=['Safe', 'Phishing'], 
+            digits=4
+        )
         print(report)
-        f.write(report + "\n\n")
+        f.write(report + "\n")
+
+        # Confusion matrix
+        cm = confusion_matrix(y_val, y_pred_val, labels=[1, 0])
+        # Labels=[1,0] så rækkefølgen bliver: [Phish, Safe]
+        print("Confusion Matrix (rows=Actual, cols=Predicted):")
+        print("           Predicted Phish  Predicted Safe")
+        print(f"Actual Phish    {cm[0,0]:5d}              {cm[0,1]:5d}")
+        print(f"Actual Safe     {cm[1,0]:5d}              {cm[1,1]:5d}\n")
+        f.write(f"Confusion Matrix:\n{cm}\n\n")
 
 # 12) Gen-træn Random Forest på train+val
 best_model = RandomForestClassifier(random_state=42)
@@ -102,7 +117,11 @@ best_model.fit(X_trainval, y_trainval)
 
 # 13) Endelig evaluation på test-sættet
 y_pred_test = best_model.predict(X_test)
-final_report = classification_report(y_test, y_pred_test, target_names=['Safe', 'Phishing'], digits=4)
+final_report = classification_report(
+    y_test, y_pred_test, 
+    target_names=['Safe', 'Phishing'], 
+    digits=4
+)
 print("\n=== Endelige test-resultater (Random Forest) ===")
 print(final_report)
 
